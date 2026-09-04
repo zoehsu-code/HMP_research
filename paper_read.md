@@ -18,22 +18,67 @@ Baseline variables are used to predict next-wave past-30-day cigarette smoking s
 
 ### Pipeline
 
-```mermaid
-flowchart TD
-    A["PATH Adult Data<br/>Wave 1 -> 2 and Wave 4 -> 5"]
-    --> B["Merge baseline variables<br/>with next-wave P30D smoking outcome"]
-    B --> C["Keep adults who had<br/>never smoked at baseline"]
-    C --> D["Data cleaning<br/>remove irrelevant variables"]
-    D --> E["Remove variables with<br/>>5% missingness,<br/>too many levels, or low variation"]
-    E --> F["Impute remaining missing values"]
-    F --> G["Remove highly correlated variables"]
-    G --> H["Final analytic datasets<br/>W1->W2: 5,776 x 145 predictors<br/>W4->W5: 7,895 x 182 predictors"]
-    H --> I["80/20 train-test split"]
-    I --> J["RF-RFE feature selection<br/>training data only"]
-    J --> K["Stable selected predictors<br/>W1: 64 variables<br/>W4: 56 variables"]
-    K --> L["Train XGBoost"]
-    L --> M["Evaluate on untouched test set"]
-    M --> N["ROC/AUC<br/>W1->W2 ~= 0.82<br/>W4->W5 ~= 0.78"]
+```text
+Raw PATH Adult Data
+(Wave 1 -> Wave 2, Wave 4 -> Wave 5)
+        |
+        v
+Population Selection
+        +-- keep adults who had never smoked at baseline
+        +-- merge baseline variables with next-wave P30D smoking outcome
+        |
+        v
+Data Preprocessing
+        +-- remove irrelevant variables
+        +-- remove variables with >5% missingness
+        +-- remove participants with missing outcome
+        +-- impute remaining missing values
+        +-- remove highly correlated variables
+        |
+        v
+Final Analytic Dataset
+        +-- W1->W2: 5,776 participants, 145 predictors
+        +-- W4->W5: 7,895 participants, 182 predictors
+        |
+        v
+80/20 Train-Test Split
+        |
+        +---- TEST ----------------------------------------+
+        |                                                 |
+      TRAIN                                               |
+        |                                                 |
+        v                                                 |
+Repeated RF-RFE                                           |
+        +-- 5-fold CV x 3 repeats                         |
+        +-- ROSE oversampling on training folds only      |
+        +-- train Random Forest                           |
+        +-- rank features by mean decrease in accuracy    |
+        +-- remove least important feature(s)             |
+        +-- retrain on reduced feature set                |
+        +-- repeat until optimal subset is found          |
+        |                                                 |
+        v                                                 |
+Stability Selection                                       |
+        +-- repeat RF-RFE across simulations              |
+        +-- keep features selected in >=95% of runs       |
+        |                                                 |
+        v                                                 |
+Stable Feature Set                                        |
+        +-- Wave 1: 64 predictors                         |
+        +-- Wave 4: 56 predictors                         |
+        |                                                 |
+        v                                                 |
+XGBoost                                                   |
+        |                                                 |
+        v                                                 |
+                         <----------------------------- TEST
+                              |
+                              v
+                        Final Evaluation
+                              +-- ROC
+                              +-- AUC
+                                  +-- W1->W2: ~0.82
+                                  +-- W4->W5: ~0.78
 ```
 
 ### RF-RFE Feature Selection
